@@ -331,3 +331,146 @@ header h1 {
 }
 
 .hidden { display: none !important; }
+
+/* ── GIF 버튼 ────────────────────────────────────────────────────────────── */
+
+.exercise-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ex-info {
+  flex: 1;
+}
+
+.gif-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.15rem 0.35rem;
+  opacity: 0.5;
+  transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.gif-btn:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  background: rgba(108, 99, 255, 0.1);
+}
+
+/* ── 모달 ────────────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+  backdrop-filter: blur(4px);
+}
+
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 460px;
+  overflow: hidden;
+  animation: modalIn 0.18s ease;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.modal-body {
+  padding: 1.4rem;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  text-align: center;
+}
+
+.modal-gif {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.modal-loading,
+.modal-error {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.modal-error { color: #f87171; }
+
+.modal-source {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.modal-source a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.modal-source a:hover { text-decoration: underline; }
+
+/* 로딩 스피너 */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }

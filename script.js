@@ -23,6 +23,9 @@ const T = {
     sets: '세트', repsUnit: '회', seconds: '초',
     restBetween: '세트 간 휴식', restDayNote: '운동일 사이 최소 1일 휴식 권장',
     tipTitle: '근비대 핵심 팁',
+    viewGif: '동작 보기',
+    gifLoading: '동작 영상 불러오는 중...',
+    gifError: '동작 영상을 찾을 수 없습니다 😅',
     levelMap: { '초급': '초급', '중급': '중급', '고급': '고급' },
     equipMap: { '헬스장': '헬스장', '홈짐': '홈짐', '맨몸': '맨몸' },
     muscleMap: { '가슴': '가슴', '등': '등', '하체': '하체', '어깨': '어깨', '팔': '팔', '복근': '복근' },
@@ -49,6 +52,9 @@ const T = {
     sets: 'sets', repsUnit: 'reps', seconds: 's',
     restBetween: 'Rest between sets', restDayNote: 'At least 1 rest day between sessions',
     tipTitle: 'Key Hypertrophy Tips',
+    viewGif: 'View Exercise',
+    gifLoading: 'Loading exercise demo...',
+    gifError: 'Exercise demo not found 😅',
     levelMap: { '초급': 'Beginner', '중급': 'Intermediate', '고급': 'Advanced' },
     equipMap: { '헬스장': 'Gym', '홈짐': 'Home Gym', '맨몸': 'Bodyweight' },
     muscleMap: { '가슴': 'Chest', '등': 'Back', '하체': 'Legs', '어깨': 'Shoulders', '팔': 'Arms', '복근': 'Abs' },
@@ -75,6 +81,9 @@ const T = {
     sets: '组', repsUnit: '次', seconds: '秒',
     restBetween: '组间休息', restDayNote: '建议每次训练之间至少休息1天',
     tipTitle: '增肌核心要点',
+    viewGif: '查看动作',
+    gifLoading: '加载动作演示中...',
+    gifError: '未找到动作演示 😅',
     levelMap: { '초급': '初级', '중급': '中级', '고급': '高级' },
     equipMap: { '헬스장': '健身房', '홈짐': '家庭健身房', '맨몸': '徒手' },
     muscleMap: { '가슴': '胸部', '등': '背部', '하체': '腿部', '어깨': '肩部', '팔': '手臂', '복근': '腹部' },
@@ -101,6 +110,9 @@ const T = {
     sets: 'セット', repsUnit: '回', seconds: '秒',
     restBetween: 'セット間の休憩', restDayNote: 'トレーニング日の間に最低1日の休息を推奨',
     tipTitle: '筋肥大のキーポイント',
+    viewGif: '動作を見る',
+    gifLoading: '動作デモを読み込み中...',
+    gifError: '動作デモが見つかりません 😅',
     levelMap: { '초급': '初級', '중급': '中級', '고급': '上級' },
     equipMap: { '헬스장': 'ジム', '홈짐': 'ホームジム', '맨몸': '自重' },
     muscleMap: { '가슴': '胸', '등': '背中', '하체': '脚', '어깨': '肩', '팔': '腕', '복근': '腹筋' },
@@ -492,14 +504,15 @@ function renderResult({ level, days, equipment, workoutDays, scheme, tips }) {
   const equipLabel = t.equipMap[equipment];
   const header = `<h2>${t.resultTitle(levelLabel, days, equipLabel)}</h2>`;
 
-  const daysHtml = workoutDays.map(day => `
+  const daysHtml = workoutDays.map((day, dayIdx) => `
     <div class="day-block">
-      <div class="day-title">Day ${workoutDays.indexOf(day) + 1} — ${SPLIT_NAMES_T[day.dayKey][lang]}</div>
+      <div class="day-title">Day ${dayIdx + 1} — ${SPLIT_NAMES_T[day.dayKey][lang]}</div>
       <ul class="exercise-list">
         ${day.exercises.map(ex => `
           <li>
             <span class="muscle-tag">${t.muscleMap[ex.muscle]}</span>
-            ${exName(ex.name)} — ${scheme.sets} ${t.sets} × ${scheme.repsRange} ${t.repsUnit}
+            <span class="ex-info">${exName(ex.name)} — ${scheme.sets} ${t.sets} × ${scheme.repsRange} ${t.repsUnit}</span>
+            <button class="gif-btn" data-ko="${ex.name.replace(/"/g, '&quot;')}" title="${t.viewGif}">🎬</button>
           </li>`).join('')}
       </ul>
     </div>
@@ -517,6 +530,77 @@ function renderResult({ level, days, equipment, workoutDays, scheme, tips }) {
   result.innerHTML = header + daysHtml + tipHtml;
   result.classList.remove('hidden');
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Exercise GIF Modal ────────────────────────────────────────────────────────
+
+const modal      = document.getElementById('exModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody  = document.getElementById('modalBody');
+const modalClose = document.getElementById('modalClose');
+
+function openModal(koName) {
+  const displayName = exName(koName);
+  const enName = EXERCISE_T[koName]?.en ?? koName;
+  modalTitle.textContent = displayName;
+  modalBody.innerHTML = `<div class="spinner"></div><p class="modal-loading">${T[lang].gifLoading}</p>`;
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  fetchExerciseGif(koName, enName);
+}
+
+function closeModal() {
+  modal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+modalClose.addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// 결과 영역에 gif-btn 이벤트 위임
+result.addEventListener('click', e => {
+  const btn = e.target.closest('.gif-btn');
+  if (btn) openModal(btn.dataset.ko);
+});
+
+async function fetchExerciseGif(koName, enName) {
+  try {
+    // 1차: WGER 검색 API (무료, API 키 불필요)
+    const searchUrl = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(enName)}&language=english&format=json`;
+    const res = await fetch(searchUrl);
+    if (!res.ok) throw new Error('network');
+    const data = await res.json();
+
+    const suggestion = data.suggestions?.[0];
+    const imgUrl = suggestion?.data?.image;
+
+    if (!imgUrl) {
+      renderModalError();
+      return;
+    }
+
+    const img = document.createElement('img');
+    img.className = 'modal-gif';
+    img.alt = enName;
+    img.onload = () => {
+      modalBody.innerHTML = '';
+      modalBody.appendChild(img);
+      const src = document.createElement('p');
+      src.className = 'modal-source';
+      src.innerHTML = 'via <a href="https://wger.de" target="_blank" rel="noopener">wger.de</a>';
+      modalBody.appendChild(src);
+    };
+    img.onerror = renderModalError;
+    img.src = imgUrl;
+
+  } catch {
+    renderModalError();
+  }
+}
+
+function renderModalError() {
+  modalBody.innerHTML = `<p class="modal-error">${T[lang].gifError}</p>`;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
