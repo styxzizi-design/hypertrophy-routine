@@ -1,0 +1,11 @@
+# Windows
+Thumbs.db
+Desktop.ini
+*.bat
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
