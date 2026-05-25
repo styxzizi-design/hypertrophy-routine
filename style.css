@@ -332,6 +332,34 @@ header h1 {
 
 .hidden { display: none !important; }
 
+/* ── 공유 버튼 ───────────────────────────────────────────────────────────── */
+
+.share-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.share-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.share-btn:hover {
+  border-color: var(--accent);
+  background: rgba(108, 99, 255, 0.12);
+  color: var(--accent);
+}
+
 /* ── GIF 버튼 ────────────────────────────────────────────────────────────── */
 
 .exercise-list li {

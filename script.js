@@ -26,6 +26,8 @@ const T = {
     viewGif: '동작 보기',
     gifLoading: '동작 영상 불러오는 중...',
     gifError: '동작 영상을 찾을 수 없습니다 😅',
+    share: '루틴 공유',
+    shareCopied: '링크 복사됨! ✅',
     levelMap: { '초급': '초급', '중급': '중급', '고급': '고급' },
     equipMap: { '헬스장': '헬스장', '홈짐': '홈짐', '맨몸': '맨몸' },
     muscleMap: { '가슴': '가슴', '등': '등', '하체': '하체', '어깨': '어깨', '팔': '팔', '복근': '복근' },
@@ -55,6 +57,8 @@ const T = {
     viewGif: 'View Exercise',
     gifLoading: 'Loading exercise demo...',
     gifError: 'Exercise demo not found 😅',
+    share: 'Share Routine',
+    shareCopied: 'Link copied! ✅',
     levelMap: { '초급': 'Beginner', '중급': 'Intermediate', '고급': 'Advanced' },
     equipMap: { '헬스장': 'Gym', '홈짐': 'Home Gym', '맨몸': 'Bodyweight' },
     muscleMap: { '가슴': 'Chest', '등': 'Back', '하체': 'Legs', '어깨': 'Shoulders', '팔': 'Arms', '복근': 'Abs' },
@@ -84,6 +88,8 @@ const T = {
     viewGif: '查看动作',
     gifLoading: '加载动作演示中...',
     gifError: '未找到动作演示 😅',
+    share: '分享计划',
+    shareCopied: '链接已复制！✅',
     levelMap: { '초급': '初级', '중급': '中级', '고급': '高级' },
     equipMap: { '헬스장': '健身房', '홈짐': '家庭健身房', '맨몸': '徒手' },
     muscleMap: { '가슴': '胸部', '등': '背部', '하체': '腿部', '어깨': '肩部', '팔': '手臂', '복근': '腹部' },
@@ -113,6 +119,8 @@ const T = {
     viewGif: '動作を見る',
     gifLoading: '動作デモを読み込み中...',
     gifError: '動作デモが見つかりません 😅',
+    share: 'ルーティンを共有',
+    shareCopied: 'リンクをコピーしました！✅',
     levelMap: { '초급': '初級', '중급': '中級', '고급': '上級' },
     equipMap: { '헬스장': 'ジム', '홈짐': 'ホームジム', '맨몸': '自重' },
     muscleMap: { '가슴': '胸', '등': '背中', '하체': '脚', '어깨': '肩', '팔': '腕', '복근': '腹筋' },
@@ -179,6 +187,7 @@ const EXERCISE_T = {
   '덤벨 트라이셉스 킥백':        { en: 'Dumbbell Triceps Kickback',    zh: '哑铃俯身臂屈伸',   ja: 'ダンベルトライセプスキックバック' },
   '친업 (언더그립)':             { en: 'Chin-Up (Underhand)',          zh: '反握引体向上',     ja: 'チンアップ（アンダーグリップ）' },
   '역그립 인버티드 로우':        { en: 'Reverse-Grip Inverted Row',    zh: '反握反向划船',     ja: 'リバースグリップインバーテッドロウ' },
+  '클로즈그립 푸시업':           { en: 'Close-Grip Push-Up',           zh: '窄距俯卧撑',       ja: 'クローズグリッププッシュアップ' },
   '크런치':                      { en: 'Crunch',                       zh: '卷腹',             ja: 'クランチ' },
   '레그레이즈':                  { en: 'Leg Raise',                    zh: '仰卧举腿',         ja: 'レッグレイズ' },
   '케이블 크런치':               { en: 'Cable Crunch',                 zh: '绳索卷腹',         ja: 'ケーブルクランチ' },
@@ -447,6 +456,9 @@ function applyLang() {
 
 function updateSliderDisplay() {
   sliderDisplay.textContent = T[lang].daysDisplay(slider.value);
+  const pct = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
+  slider.style.background =
+    `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
 }
 
 slider.addEventListener('input', updateSliderDisplay);
@@ -485,6 +497,7 @@ form.addEventListener('submit', (e) => {
 
   const routineData = generateRoutine(level, days, targets, equipment);
   lastRoutine = { level, days, equipment, ...routineData };
+  pushRoutineUrl(level, days, targets, equipment);
   renderResult(lastRoutine);
 });
 
@@ -527,9 +540,71 @@ function renderResult({ level, days, equipment, workoutDays, scheme, tips }) {
     </div>
   `;
 
-  result.innerHTML = header + daysHtml + tipHtml;
+  const shareHtml = `
+    <div class="share-row">
+      <button class="share-btn" id="shareBtn">🔗 ${t.share}</button>
+    </div>
+  `;
+
+  result.innerHTML = header + daysHtml + tipHtml + shareHtml;
   result.classList.remove('hidden');
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('shareBtn').addEventListener('click', () => {
+    copyRoutineUrl();
+  });
+}
+
+// ── URL Share ─────────────────────────────────────────────────────────────────
+
+function pushRoutineUrl(level, days, targets, equipment) {
+  const params = new URLSearchParams({
+    level, days, targets: targets.join(','), equipment, lang,
+  });
+  history.replaceState(null, '', '?' + params.toString());
+}
+
+function copyRoutineUrl() {
+  const btn = document.getElementById('shareBtn');
+  navigator.clipboard.writeText(location.href).then(() => {
+    btn.textContent = T[lang].shareCopied;
+    setTimeout(() => { btn.textContent = '🔗 ' + T[lang].share; }, 2500);
+  });
+}
+
+function restoreFromUrl() {
+  const p = new URLSearchParams(location.search);
+  if (!p.has('level')) return;
+
+  const level     = p.get('level');
+  const days      = Number(p.get('days'));
+  const targets   = p.get('targets').split(',').filter(Boolean);
+  const equipment = p.get('equipment');
+  const urlLang   = p.get('lang');
+
+  // 언어 복원
+  if (urlLang && T[urlLang]) {
+    lang = urlLang;
+    localStorage.setItem('lang', lang);
+  }
+
+  // 폼 값 복원
+  const levelInput = document.querySelector(`input[name="level"][value="${level}"]`);
+  if (levelInput) levelInput.checked = true;
+
+  if (days >= 2 && days <= 6) slider.value = days;
+
+  document.querySelectorAll('input[name="target"]').forEach(cb => {
+    cb.checked = targets.includes(cb.value);
+  });
+
+  const eqInput = document.querySelector(`input[name="equipment"][value="${equipment}"]`);
+  if (eqInput) eqInput.checked = true;
+
+  // 루틴 생성
+  const routineData = generateRoutine(level, days, targets, equipment);
+  lastRoutine = { level, days, equipment, ...routineData };
+  renderResult(lastRoutine);
 }
 
 // ── Exercise GIF Modal ────────────────────────────────────────────────────────
@@ -606,3 +681,4 @@ function renderModalError() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 applyLang();
+restoreFromUrl();
