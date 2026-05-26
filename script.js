@@ -542,6 +542,7 @@ function renderResult({ level, days, equipment, workoutDays, scheme, tips }) {
 
   const shareHtml = `
     <div class="share-row">
+      <button class="save-routine-btn${currentUser ? '' : ' hidden'}" id="saveRoutineBtn" onclick="saveRoutineToCloud()">💾 루틴 저장</button>
       <button class="share-btn" id="shareBtn">🔗 ${t.share}</button>
     </div>
   `;
@@ -695,91 +696,168 @@ function renderModalFallback(enName) {
   `;
 }
 
-// ── Google Auth ───────────────────────────────────────────────────────────────
+// ── Firebase ──────────────────────────────────────────────────────────────────
 
-// ⚠️ Google Cloud Console에서 발급받은 OAuth 2.0 Client ID를 여기에 넣으세요
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
+const firebaseConfig = {
+  apiKey:            'AIzaSyBU2TNqcNHyBF6ljpQIwznOc3VLkgM5ooA',
+  authDomain:        'health-3d452.firebaseapp.com',
+  projectId:         'health-3d452',
+  storageBucket:     'health-3d452.firebasestorage.app',
+  messagingSenderId: '989455480587',
+  appId:             '1:989455480587:web:ad98e70e1aa1973818140e',
+  measurementId:     'G-7KCG2P4XTR',
+};
 
-function parseJwt(token) {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(decodeURIComponent(
-      atob(base64).split('').map(c =>
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      ).join('')
-    ));
-  } catch { return null; }
-}
+firebase.initializeApp(firebaseConfig);
+firebase.analytics();
+const auth           = firebase.auth();
+const db             = firebase.firestore();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-function getSavedUser() {
-  try { return JSON.parse(localStorage.getItem('gUser')); } catch { return null; }
-}
+let currentUser = null;
 
-function handleCredentialResponse(response) {
-  const payload = parseJwt(response.credential);
-  if (!payload) return;
-  const user = { name: payload.name, email: payload.email, picture: payload.picture };
-  localStorage.setItem('gUser', JSON.stringify(user));
+// ── Auth 상태 감지 ────────────────────────────────────────────────────────────
+
+auth.onAuthStateChanged(user => {
+  currentUser = user;
   renderUserArea();
-}
+  const wrapper = document.getElementById('myRoutinesWrapper');
+  if (wrapper) wrapper.classList.toggle('hidden', !user);
+  if (user) loadMyRoutines();
+});
 
-function triggerGoogleLogin() {
-  if (typeof google === 'undefined') return;
-  google.accounts.id.prompt();
+// ── 로그인 / 로그아웃 ─────────────────────────────────────────────────────────
+
+function signInWithGoogle() {
+  auth.signInWithPopup(googleProvider).catch(err => console.error('로그인 실패:', err));
 }
 
 function signOut() {
-  if (typeof google !== 'undefined') {
-    google.accounts.id.disableAutoSelect();
-  }
-  localStorage.removeItem('gUser');
-  renderUserArea();
+  auth.signOut();
 }
+
+// ── 유저 UI 렌더 ──────────────────────────────────────────────────────────────
+
+const G_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+</svg>`;
 
 function renderUserArea() {
   const area = document.getElementById('userArea');
   if (!area) return;
-  const user = getSavedUser();
 
-  if (user) {
-    const firstName = user.name.split(' ')[0];
-    area.innerHTML = `
+  if (currentUser) {
+    const firstName = (currentUser.displayName || currentUser.email || '').split(' ')[0];
+    const pic       = currentUser.photoURL || '';
+    area.innerHTML  = `
       <div class="user-profile">
-        <img class="user-avatar" src="${user.picture}" alt="${user.name}"
-             referrerpolicy="no-referrer" />
-        <span class="user-name" title="${user.email}">${firstName}</span>
+        ${pic ? `<img class="user-avatar" src="${pic}" alt="${firstName}" referrerpolicy="no-referrer" />` : ''}
+        <span class="user-name" title="${currentUser.email}">${firstName}</span>
         <button class="logout-btn" onclick="signOut()" title="로그아웃">✕</button>
       </div>`;
   } else {
     area.innerHTML = `
-      <button class="login-btn" onclick="triggerGoogleLogin()">
-        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-        </svg>
-        로그인
+      <button class="login-btn" onclick="signInWithGoogle()">
+        ${G_ICON} 로그인
       </button>`;
+  }
+
+  // 결과 영역 저장 버튼 표시 갱신
+  const saveBtn = document.getElementById('saveRoutineBtn');
+  if (saveBtn) saveBtn.classList.toggle('hidden', !currentUser);
+}
+
+// ── Firestore: 루틴 저장 ──────────────────────────────────────────────────────
+
+async function saveRoutineToCloud() {
+  if (!currentUser || !lastRoutine) return;
+  const btn = document.getElementById('saveRoutineBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+
+  try {
+    await db.collection('users').doc(currentUser.uid)
+            .collection('routines').add({
+      level:       lastRoutine.level,
+      days:        lastRoutine.days,
+      equipment:   lastRoutine.equipment,
+      workoutDays: lastRoutine.workoutDays,
+      lang,
+      createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    if (btn) btn.textContent = '✅ 저장됨!';
+    setTimeout(() => {
+      if (btn) { btn.textContent = '💾 루틴 저장'; btn.disabled = false; }
+    }, 2000);
+    loadMyRoutines();
+  } catch (err) {
+    console.error('저장 실패:', err);
+    if (btn) { btn.textContent = '저장 실패 ❌'; btn.disabled = false; }
   }
 }
 
-function initGoogleAuth() {
-  if (typeof google === 'undefined' || GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
-    renderUserArea(); // Client ID 미설정 시에도 UI는 렌더
-    return;
+// ── Firestore: 내 루틴 목록 ───────────────────────────────────────────────────
+
+async function loadMyRoutines() {
+  const section = document.getElementById('myRoutinesSection');
+  if (!section || !currentUser) return;
+  section.innerHTML = '<p class="no-routines">불러오는 중…</p>';
+
+  try {
+    const snap = await db.collection('users').doc(currentUser.uid)
+      .collection('routines')
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
+
+    if (snap.empty) {
+      section.innerHTML = '<p class="no-routines">저장된 루틴이 없습니다.</p>';
+      return;
+    }
+
+    const t = T[lang];
+    section.innerHTML = snap.docs.map(doc => {
+      const d       = doc.data();
+      const date    = d.createdAt?.toDate?.();
+      const dateStr = date
+        ? date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+        : '';
+      return `
+        <div class="saved-routine-card" onclick="loadSavedRoutine('${doc.id}', this)">
+          <div class="saved-routine-meta">
+            <span class="saved-badge">${t.levelMap?.[d.level] ?? d.level}</span>
+            <span class="saved-badge">주 ${d.days}일</span>
+            <span class="saved-badge">${t.equipMap?.[d.equipment] ?? d.equipment}</span>
+          </div>
+          <div class="saved-routine-date">${dateStr}</div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('루틴 목록 오류:', err);
+    section.innerHTML = '<p class="no-routines">불러오기 실패 ❌</p>';
   }
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleCredentialResponse,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-  });
-  renderUserArea();
+}
+
+async function loadSavedRoutine(routineId, cardEl) {
+  if (!currentUser) return;
+  try {
+    const doc = await db.collection('users').doc(currentUser.uid)
+      .collection('routines').doc(routineId).get();
+    if (!doc.exists) return;
+    const d    = doc.data();
+    lastRoutine = { ...d, scheme: SCHEME[d.level], tips: TIPS[d.level] };
+    renderResult(lastRoutine);
+    document.querySelectorAll('.saved-routine-card').forEach(c => c.classList.remove('active'));
+    cardEl.classList.add('active');
+    result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    console.error('루틴 로드 실패:', err);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 applyLang();
 restoreFromUrl();
-initGoogleAuth();

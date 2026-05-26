@@ -126,6 +126,12 @@
       </button>
     </form>
 
+    <!-- 내 저장된 루틴 (로그인 시 표시) -->
+    <div id="myRoutinesWrapper" class="my-routines-wrapper hidden">
+      <div class="my-routines-title">📋 내 저장된 루틴</div>
+      <div id="myRoutinesSection" class="my-routines-section"></div>
+    </div>
+
     <div id="result" class="result hidden"></div>
   </div>
 
@@ -140,7 +146,11 @@
     </div>
   </div>
 
-  <script src="https://accounts.google.com/gsi/client" defer></script>
+  <!-- Firebase compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js" defer></script>
   <script src="script.js" defer></script>
 </body>
 </html>
