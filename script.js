@@ -642,7 +642,7 @@ result.addEventListener('click', e => {
 
 // ── ExerciseDB API 키 (RapidAPI 무료 발급) ───────────────────────────────────
 // https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb 에서 무료 구독 후 입력
-const EXERCISEDB_KEY = 'YOUR_RAPIDAPI_KEY';
+const EXERCISEDB_KEY = '6993a4db39msh16d4f9394f14767p1d7deejsn4e9d8f3f4a08';
 
 // ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
 
