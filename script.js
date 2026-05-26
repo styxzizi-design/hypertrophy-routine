@@ -800,32 +800,51 @@ async function saveRoutineToCloud() {
 
 // ── Firestore: 내 루틴 목록 ───────────────────────────────────────────────────
 
+let routinesLoading = false; // 중복 호출 방어 플래그
+
 async function loadMyRoutines() {
   const section = document.getElementById('myRoutinesSection');
-  if (!section || !currentUser) return;
+  if (!section || !currentUser || routinesLoading) return;
+
+  routinesLoading = true;
   section.innerHTML = '<p class="no-routines">불러오는 중…</p>';
 
+  // 8초 초과 시 자동 해제
+  const timeoutId = setTimeout(() => {
+    if (routinesLoading) {
+      section.innerHTML = '<p class="no-routines">연결 시간 초과 — 새로고침해주세요.</p>';
+      routinesLoading = false;
+    }
+  }, 8000);
+
   try {
+    // orderBy 제거 → 클라이언트 정렬로 대체 (Firestore 인덱스 불필요)
     const snap = await db.collection('users').doc(currentUser.uid)
       .collection('routines')
-      .orderBy('createdAt', 'desc')
-      .limit(5)
+      .limit(10)
       .get();
+
+    clearTimeout(timeoutId);
 
     if (snap.empty) {
       section.innerHTML = '<p class="no-routines">저장된 루틴이 없습니다.</p>';
       return;
     }
 
+    // 클라이언트에서 createdAt 내림차순 정렬 후 최대 5개
+    const docs = snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+      .slice(0, 5);
+
     const t = T[lang];
-    section.innerHTML = snap.docs.map(doc => {
-      const d       = doc.data();
+    section.innerHTML = docs.map(d => {
       const date    = d.createdAt?.toDate?.();
       const dateStr = date
         ? date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
         : '';
       return `
-        <div class="saved-routine-card" onclick="loadSavedRoutine('${doc.id}', this)">
+        <div class="saved-routine-card" onclick="loadSavedRoutine('${d.id}', this)">
           <div class="saved-routine-meta">
             <span class="saved-badge">${t.levelMap?.[d.level] ?? d.level}</span>
             <span class="saved-badge">주 ${d.days}일</span>
@@ -835,8 +854,11 @@ async function loadMyRoutines() {
         </div>`;
     }).join('');
   } catch (err) {
+    clearTimeout(timeoutId);
     console.error('루틴 목록 오류:', err);
     section.innerHTML = '<p class="no-routines">불러오기 실패 ❌</p>';
+  } finally {
+    routinesLoading = false;
   }
 }
 
