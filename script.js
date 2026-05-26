@@ -640,60 +640,95 @@ result.addEventListener('click', e => {
   if (btn) openModal(btn.dataset.ko);
 });
 
-async function fetchExerciseGif(koName, enName) {
-  try {
-    // Step 1: wger 검색 API로 base_id + 이미지 URL 확보
-    const searchUrl = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(enName)}&language=english&format=json`;
-    const res = await fetch(searchUrl);
-    if (!res.ok) throw new Error('network');
-    const data = await res.json();
+// ── ExerciseDB API 키 (RapidAPI 무료 발급) ───────────────────────────────────
+// https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb 에서 무료 구독 후 입력
+const EXERCISEDB_KEY = 'YOUR_RAPIDAPI_KEY';
 
-    const suggestion = data.suggestions?.[0];
-    let imgUrl = suggestion?.data?.image;
-    const baseId = suggestion?.data?.base_id;
+// ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
 
-    // Step 2: 검색 결과에 이미지가 없으면 exerciseimage 엔드포인트로 재시도
-    if (!imgUrl && baseId) {
-      const imgRes = await fetch(
-        `https://wger.de/api/v2/exerciseimage/?format=json&exercise_base_id=${baseId}`
-      );
-      if (imgRes.ok) {
-        const imgData = await imgRes.json();
-        imgUrl = imgData.results?.[0]?.image;
-      }
-    }
-
-    if (imgUrl) {
-      const img = document.createElement('img');
-      img.className = 'modal-gif';
-      img.alt = enName;
-      img.onload = () => {
-        modalBody.innerHTML = '';
-        modalBody.appendChild(img);
-        const src = document.createElement('p');
-        src.className = 'modal-source';
-        src.innerHTML = 'via <a href="https://wger.de" target="_blank" rel="noopener">wger.de</a>';
-        modalBody.appendChild(src);
-      };
-      img.onerror = () => renderModalFallback(enName);
-      img.src = imgUrl;
-    } else {
-      renderModalFallback(enName);
-    }
-
-  } catch {
-    renderModalFallback(enName);
-  }
+function showModalGif(url, altText, sourceLabel, sourceHref) {
+  const img = document.createElement('img');
+  img.className = 'modal-gif';
+  img.alt = altText;
+  img.onload = () => {
+    modalBody.innerHTML = '';
+    modalBody.appendChild(img);
+    const src = document.createElement('p');
+    src.className = 'modal-source';
+    src.innerHTML = `via <a href="${sourceHref}" target="_blank" rel="noopener">${sourceLabel}</a>`;
+    modalBody.appendChild(src);
+  };
+  img.onerror = () => renderModalError();
+  img.src = url;
 }
 
-function renderModalFallback(enName) {
-  const query = encodeURIComponent(enName + ' exercise how to tutorial');
-  modalBody.innerHTML = `
-    <p class="modal-error">${T[lang].gifError}</p>
-    <a class="yt-link"
-       href="https://www.youtube.com/results?search_query=${query}"
-       target="_blank" rel="noopener">▶ YouTube에서 보기</a>
-  `;
+function renderModalError() {
+  modalBody.innerHTML = `<p class="modal-error">${T[lang].gifError}</p>`;
+}
+
+// ── 1차: ExerciseDB (GIF, 전체 운동 지원) ────────────────────────────────────
+
+async function fetchFromExerciseDB(enName) {
+  if (EXERCISEDB_KEY === 'YOUR_RAPIDAPI_KEY') return null;
+  const url = `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(enName.toLowerCase())}?offset=0&limit=1`;
+  const res = await fetch(url, {
+    headers: {
+      'X-RapidAPI-Key': EXERCISEDB_KEY,
+      'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+    },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data[0]?.gifUrl ?? null;
+}
+
+// ── 2차: wger.de (일부 운동 이미지) ──────────────────────────────────────────
+
+async function fetchFromWger(enName) {
+  const searchUrl = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(enName)}&language=english&format=json`;
+  const res = await fetch(searchUrl);
+  if (!res.ok) return null;
+  const data = await res.json();
+
+  const suggestion = data.suggestions?.[0];
+  let imgUrl = suggestion?.data?.image;
+  const baseId = suggestion?.data?.base_id;
+
+  if (!imgUrl && baseId) {
+    const imgRes = await fetch(
+      `https://wger.de/api/v2/exerciseimage/?format=json&exercise_base_id=${baseId}`
+    );
+    if (imgRes.ok) {
+      const imgData = await imgRes.json();
+      imgUrl = imgData.results?.[0]?.image;
+    }
+  }
+  return imgUrl ?? null;
+}
+
+// ── 통합 GIF 조회 ─────────────────────────────────────────────────────────────
+
+async function fetchExerciseGif(koName, enName) {
+  // 1차: ExerciseDB (애니메이션 GIF)
+  try {
+    const gifUrl = await fetchFromExerciseDB(enName);
+    if (gifUrl) {
+      showModalGif(gifUrl, enName, 'ExerciseDB', 'https://exercisedb.io');
+      return;
+    }
+  } catch { /* 다음 소스로 */ }
+
+  // 2차: wger.de (정적 이미지)
+  try {
+    const imgUrl = await fetchFromWger(enName);
+    if (imgUrl) {
+      showModalGif(imgUrl, enName, 'wger.de', 'https://wger.de');
+      return;
+    }
+  } catch { /* 다음 소스로 */ }
+
+  // 최종: 에러 메시지
+  renderModalError();
 }
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
