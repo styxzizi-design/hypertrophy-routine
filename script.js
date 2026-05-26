@@ -641,41 +641,58 @@ result.addEventListener('click', e => {
 
 async function fetchExerciseGif(koName, enName) {
   try {
-    // 1차: WGER 검색 API (무료, API 키 불필요)
+    // Step 1: wger 검색 API로 base_id + 이미지 URL 확보
     const searchUrl = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(enName)}&language=english&format=json`;
     const res = await fetch(searchUrl);
     if (!res.ok) throw new Error('network');
     const data = await res.json();
 
     const suggestion = data.suggestions?.[0];
-    const imgUrl = suggestion?.data?.image;
+    let imgUrl = suggestion?.data?.image;
+    const baseId = suggestion?.data?.base_id;
 
-    if (!imgUrl) {
-      renderModalError();
-      return;
+    // Step 2: 검색 결과에 이미지가 없으면 exerciseimage 엔드포인트로 재시도
+    if (!imgUrl && baseId) {
+      const imgRes = await fetch(
+        `https://wger.de/api/v2/exerciseimage/?format=json&exercise_base_id=${baseId}`
+      );
+      if (imgRes.ok) {
+        const imgData = await imgRes.json();
+        imgUrl = imgData.results?.[0]?.image;
+      }
     }
 
-    const img = document.createElement('img');
-    img.className = 'modal-gif';
-    img.alt = enName;
-    img.onload = () => {
-      modalBody.innerHTML = '';
-      modalBody.appendChild(img);
-      const src = document.createElement('p');
-      src.className = 'modal-source';
-      src.innerHTML = 'via <a href="https://wger.de" target="_blank" rel="noopener">wger.de</a>';
-      modalBody.appendChild(src);
-    };
-    img.onerror = renderModalError;
-    img.src = imgUrl;
+    if (imgUrl) {
+      const img = document.createElement('img');
+      img.className = 'modal-gif';
+      img.alt = enName;
+      img.onload = () => {
+        modalBody.innerHTML = '';
+        modalBody.appendChild(img);
+        const src = document.createElement('p');
+        src.className = 'modal-source';
+        src.innerHTML = 'via <a href="https://wger.de" target="_blank" rel="noopener">wger.de</a>';
+        modalBody.appendChild(src);
+      };
+      img.onerror = () => renderModalFallback(enName);
+      img.src = imgUrl;
+    } else {
+      renderModalFallback(enName);
+    }
 
   } catch {
-    renderModalError();
+    renderModalFallback(enName);
   }
 }
 
-function renderModalError() {
-  modalBody.innerHTML = `<p class="modal-error">${T[lang].gifError}</p>`;
+function renderModalFallback(enName) {
+  const query = encodeURIComponent(enName + ' exercise how to tutorial');
+  modalBody.innerHTML = `
+    <p class="modal-error">${T[lang].gifError}</p>
+    <a class="yt-link"
+       href="https://www.youtube.com/results?search_query=${query}"
+       target="_blank" rel="noopener">▶ YouTube에서 보기</a>
+  `;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

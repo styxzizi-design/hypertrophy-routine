@@ -502,3 +502,24 @@ header h1 {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* YouTube 폴백 링크 */
+.yt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #ff0000;
+  color: #fff;
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.yt-link:hover {
+  background: #cc0000;
+  transform: scale(1.03);
+}
