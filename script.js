@@ -640,9 +640,57 @@ result.addEventListener('click', e => {
   if (btn) openModal(btn.dataset.ko);
 });
 
-// ── ExerciseDB API 키 (RapidAPI 무료 발급) ───────────────────────────────────
-// https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb 에서 무료 구독 후 입력
+// ── ExerciseDB API 키 ─────────────────────────────────────────────────────────
 const EXERCISEDB_KEY = '6993a4db39msh16d4f9394f14767p1d7deejsn4e9d8f3f4a08';
+const GIF_CACHE_KEY  = 'exdb_gif_cache_v1';
+const GIF_CACHE_TTL  = 7 * 24 * 60 * 60 * 1000; // 7일
+
+// ── GIF 캐시 헬퍼 ────────────────────────────────────────────────────────────
+
+function readGifCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(GIF_CACHE_KEY));
+    if (raw && Date.now() - raw.ts < GIF_CACHE_TTL) return raw.data;
+  } catch {}
+  return null;
+}
+
+function writeGifCache(data) {
+  try { localStorage.setItem(GIF_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
+
+function gifFromCache(enName) {
+  const cache = readGifCache();
+  return cache?.[enName.toLowerCase()] ?? null;
+}
+
+// ── 앱 시작 시 전체 운동 GIF 1회 프리로드 (API 1콜로 7일치 캐시) ──────────────
+
+async function preloadExerciseGifs() {
+  if (EXERCISEDB_KEY === 'YOUR_RAPIDAPI_KEY') return;
+  if (readGifCache()) return; // 캐시 유효하면 스킵
+
+  try {
+    const res = await fetch(
+      'https://exercisedb.p.rapidapi.com/exercises?offset=0&limit=1300',
+      {
+        headers: {
+          'X-RapidAPI-Key': EXERCISEDB_KEY,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+        },
+      }
+    );
+    if (!res.ok) return;
+    const exercises = await res.json();
+
+    const gifMap = {};
+    exercises.forEach(ex => { gifMap[ex.name.toLowerCase()] = ex.gifUrl; });
+    writeGifCache(gifMap);
+    console.log(`[ExerciseDB] ${exercises.length}개 운동 GIF 캐시 완료`);
+  } catch (err) {
+    console.warn('[ExerciseDB] 프리로드 실패:', err.message);
+  }
+}
 
 // ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
 
@@ -666,23 +714,7 @@ function renderModalError() {
   modalBody.innerHTML = `<p class="modal-error">${T[lang].gifError}</p>`;
 }
 
-// ── 1차: ExerciseDB (GIF, 전체 운동 지원) ────────────────────────────────────
-
-async function fetchFromExerciseDB(enName) {
-  if (EXERCISEDB_KEY === 'YOUR_RAPIDAPI_KEY') return null;
-  const url = `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(enName.toLowerCase())}?offset=0&limit=1`;
-  const res = await fetch(url, {
-    headers: {
-      'X-RapidAPI-Key': EXERCISEDB_KEY,
-      'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
-    },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data[0]?.gifUrl ?? null;
-}
-
-// ── 2차: wger.de (일부 운동 이미지) ──────────────────────────────────────────
+// ── 2차 폴백: wger.de ────────────────────────────────────────────────────────
 
 async function fetchFromWger(enName) {
   const searchUrl = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(enName)}&language=english&format=json`;
@@ -709,16 +741,39 @@ async function fetchFromWger(enName) {
 // ── 통합 GIF 조회 ─────────────────────────────────────────────────────────────
 
 async function fetchExerciseGif(koName, enName) {
-  // 1차: ExerciseDB (애니메이션 GIF)
-  try {
-    const gifUrl = await fetchFromExerciseDB(enName);
-    if (gifUrl) {
-      showModalGif(gifUrl, enName, 'ExerciseDB', 'https://exercisedb.io');
-      return;
-    }
-  } catch { /* 다음 소스로 */ }
+  // 1차: ExerciseDB 캐시 (API 호출 없음)
+  const cached = gifFromCache(enName);
+  if (cached) {
+    showModalGif(cached, enName, 'ExerciseDB', 'https://exercisedb.io');
+    return;
+  }
 
-  // 2차: wger.de (정적 이미지)
+  // 캐시 미스 시 단건 조회
+  if (EXERCISEDB_KEY !== 'YOUR_RAPIDAPI_KEY') {
+    try {
+      const url = `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(enName.toLowerCase())}?offset=0&limit=1`;
+      const res = await fetch(url, {
+        headers: {
+          'X-RapidAPI-Key': EXERCISEDB_KEY,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const gifUrl = data[0]?.gifUrl;
+        if (gifUrl) {
+          // 단건도 캐시에 저장
+          const cache = readGifCache() ?? {};
+          cache[enName.toLowerCase()] = gifUrl;
+          writeGifCache(cache);
+          showModalGif(gifUrl, enName, 'ExerciseDB', 'https://exercisedb.io');
+          return;
+        }
+      }
+    } catch { /* 다음 소스로 */ }
+  }
+
+  // 2차: wger.de
   try {
     const imgUrl = await fetchFromWger(enName);
     if (imgUrl) {
@@ -727,7 +782,6 @@ async function fetchExerciseGif(koName, enName) {
     }
   } catch { /* 다음 소스로 */ }
 
-  // 최종: 에러 메시지
   renderModalError();
 }
 
@@ -918,3 +972,4 @@ async function loadSavedRoutine(routineId, cardEl) {
 
 applyLang();
 restoreFromUrl();
+preloadExerciseGifs(); // 앱 시작 시 운동 GIF 전체 캐시 (7일간 API 1콜)
