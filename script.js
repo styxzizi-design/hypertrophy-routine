@@ -810,13 +810,17 @@ function showModalAnimation(frames, altText) {
     f0.alt = altText;
     f0.className = 'anim-frame anim-f0';
 
+    const f1wrap = document.createElement('div');
+    f1wrap.className = 'anim-f1';
+
     const f1 = document.createElement('img');
     f1.src = frames.f1;
     f1.alt = altText;
-    f1.className = 'anim-frame anim-f1';
+    f1.className = 'anim-frame';
+    f1wrap.appendChild(f1);
 
     wrap.appendChild(f0);
-    wrap.appendChild(f1);
+    wrap.appendChild(f1wrap);
     modalBody.appendChild(wrap);
 
     const src = document.createElement('p');

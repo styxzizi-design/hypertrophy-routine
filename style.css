@@ -488,25 +488,29 @@ header h1 {
 }
 
 .anim-f0 {
-  animation: flip-f0 1.8s steps(1, end) infinite;
+  animation: flip-f0 1.8s step-end infinite;
 }
 
 .anim-f1 {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation: flip-f1 1.8s steps(1, end) infinite;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: flip-f1 1.8s step-end infinite;
 }
 
 @keyframes flip-f0 {
-  0%, 49.9% { opacity: 1; }
-  50%, 100%  { opacity: 0; }
+  0%   { opacity: 1; }
+  50%  { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 @keyframes flip-f1 {
-  0%, 49.9% { opacity: 0; }
-  50%, 100%  { opacity: 1; }
+  0%   { opacity: 0; }
+  50%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .modal-loading,
