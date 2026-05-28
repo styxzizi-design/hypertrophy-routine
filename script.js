@@ -664,36 +664,11 @@ function gifFromCache(enName) {
   return cache?.[enName.toLowerCase()] ?? null;
 }
 
-// ── 앱 시작 시 전체 운동 GIF 1회 프리로드 (API 1콜로 7일치 캐시) ──────────────
+// ── ExerciseDB 프리로드 (현재 API는 gifUrl 미제공 — 캐시만 확인) ─────────────
 
 async function preloadExerciseGifs() {
-  if (EXERCISEDB_KEY === 'YOUR_RAPIDAPI_KEY') return;
-  if (readGifCache()) { console.log('[GIF] 캐시 유효 — 프리로드 생략'); return; }
-
-  console.log('[GIF] ExerciseDB 프리로드 시작...');
-  try {
-    const res = await fetch(
-      'https://exercisedb.p.rapidapi.com/exercises?offset=0&limit=1300',
-      {
-        headers: {
-          'X-RapidAPI-Key': EXERCISEDB_KEY,
-          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
-        },
-      }
-    );
-    console.log('[GIF] 응답:', res.status, res.statusText);
-    if (!res.ok) {
-      console.error('[GIF] ExerciseDB 실패 —', res.status, '(rate limit이면 내일 다시 시도)');
-      return;
-    }
-    const exercises = await res.json();
-    const gifMap = {};
-    exercises.forEach(ex => { gifMap[ex.name.toLowerCase()] = ex.gifUrl; });
-    writeGifCache(gifMap);
-    console.log(`[GIF] ${exercises.length}개 운동 캐시 완료 ✅`);
-  } catch (err) {
-    console.error('[GIF] 프리로드 오류:', err.message);
-  }
+  // ExerciseDB API v2는 gifUrl을 반환하지 않음 — 정적 맵으로 대체
+  // 기존 캐시에 gifUrl이 있으면 2차 소스로 활용
 }
 
 // ── 2차 폴백: free-exercise-db 정적 이미지 맵 (100% 검증된 URL) ─────────────
@@ -778,9 +753,14 @@ const EXERCISE_IMG_MAP = {
   'V-Up':                         'Reverse_Crunch/0.jpg',
 };
 
-function getStaticImgUrl(enName) {
+function getStaticImgFrames(enName) {
   const path = EXERCISE_IMG_MAP[enName];
-  return path ? FEDB_BASE + path : null;
+  if (!path) return null;
+  const folder = path.replace('/0.jpg', '');
+  return {
+    f0: FEDB_BASE + folder + '/0.jpg',
+    f1: FEDB_BASE + folder + '/1.jpg',
+  };
 }
 
 // 동적 캐시 (ExerciseDB 프리로드 결과 보완용)
@@ -812,80 +792,88 @@ async function loadFreeExerciseDB() {
   } catch {}
 }
 
-function getFreeDbUrl(enName) {
-  // 1. 정적 맵 우선 (100% 검증된 URL)
-  const staticUrl = getStaticImgUrl(enName);
-  if (staticUrl) return staticUrl;
-  // 2. 동적 캐시 보완
-  const cache = readFedbCache();
-  if (!cache) return null;
-  const key = enName.toLowerCase();
-  return cache[key] ?? null;
-}
+// ── 2프레임 플립북 애니메이션 표시 ────────────────────────────────────────────
 
-// ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
+function showModalAnimation(frames, altText) {
+  const img0 = new Image();
+  const img1 = new Image();
+  let loaded = 0;
 
-function showModalGif(url, altText, sourceLabel, sourceHref) {
-  const img = document.createElement('img');
-  img.className = 'modal-gif';
-  img.alt = altText;
-  img.onload = () => {
+  function onBothLoaded() {
     modalBody.innerHTML = '';
-    modalBody.appendChild(img);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'exercise-anim';
+
+    const f0 = document.createElement('img');
+    f0.src = frames.f0;
+    f0.alt = altText;
+    f0.className = 'anim-frame anim-f0';
+
+    const f1 = document.createElement('img');
+    f1.src = frames.f1;
+    f1.alt = altText;
+    f1.className = 'anim-frame anim-f1';
+
+    wrap.appendChild(f0);
+    wrap.appendChild(f1);
+    modalBody.appendChild(wrap);
+
     const src = document.createElement('p');
     src.className = 'modal-source';
-    src.innerHTML = `via <a href="${sourceHref}" target="_blank" rel="noopener">${sourceLabel}</a>`;
+    src.innerHTML = `via <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a>`;
     modalBody.appendChild(src);
+  }
+
+  function tryLoad() {
+    loaded++;
+    if (loaded === 2) onBothLoaded();
+  }
+
+  img0.onload = tryLoad;
+  img1.onload = tryLoad;
+  // 프레임2 없으면 단일 이미지로 fallback
+  img0.onerror = () => renderModalError();
+  img1.onerror = () => {
+    loaded++;
+    if (loaded === 2) onBothLoaded(); // f0만 로드돼도 표시 (f1은 안 보임)
   };
-  img.onerror = () => renderModalError();
-  img.src = url;
+
+  img0.src = frames.f0;
+  img1.src = frames.f1;
 }
 
 function renderModalError() {
   modalBody.innerHTML = `<p class="modal-error">${T[lang].gifError}</p>`;
 }
 
-
-// ── 통합 GIF 조회 ─────────────────────────────────────────────────────────────
+// ── 동작 조회 (정적 2프레임 애니메이션 우선) ────────────────────────────────
 
 async function fetchExerciseGif(koName, enName) {
-  // 1차: ExerciseDB 캐시 (API 호출 없음 — 즉시)
-  const cached = gifFromCache(enName);
-  if (cached) {
-    showModalGif(cached, enName, 'ExerciseDB', 'https://exercisedb.io');
+  // 1차: 정적 2프레임 애니메이션 (100% 검증된 URL, 즉시)
+  const frames = getStaticImgFrames(enName);
+  if (frames) {
+    showModalAnimation(frames, enName);
     return;
   }
 
-  // 캐시 미스 시 단건 조회 (rate limit이면 조용히 skip)
-  if (EXERCISEDB_KEY !== 'YOUR_RAPIDAPI_KEY') {
-    try {
-      const res = await fetch(
-        `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(enName.toLowerCase())}?offset=0&limit=1`,
-        {
-          headers: {
-            'X-RapidAPI-Key': EXERCISEDB_KEY,
-            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
-          },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const gifUrl = data[0]?.gifUrl;
-        if (gifUrl) {
-          const cache = readGifCache() ?? {};
-          cache[enName.toLowerCase()] = gifUrl;
-          writeGifCache(cache);
-          showModalGif(gifUrl, enName, 'ExerciseDB', 'https://exercisedb.io');
-          return;
-        }
-      }
-    } catch { /* 다음 소스로 */ }
-  }
-
-  // 2차: free-exercise-db (GitHub, 무제한 무료, API 없음)
-  const freeUrl = getFreeDbUrl(enName);
-  if (freeUrl) {
-    showModalGif(freeUrl, enName, 'free-exercise-db', 'https://github.com/yuhonas/free-exercise-db');
+  // 2차: ExerciseDB 캐시 (gifUrl이 있는 경우 — 구버전 API 캐시)
+  const cached = gifFromCache(enName);
+  if (cached) {
+    // gifUrl은 애니메이션 GIF이므로 단일 img로 표시
+    const img = document.createElement('img');
+    img.className = 'modal-gif';
+    img.alt = enName;
+    img.onload = () => {
+      modalBody.innerHTML = '';
+      modalBody.appendChild(img);
+      const src = document.createElement('p');
+      src.className = 'modal-source';
+      src.innerHTML = `via <a href="https://exercisedb.io" target="_blank" rel="noopener">ExerciseDB</a>`;
+      modalBody.appendChild(src);
+    };
+    img.onerror = () => renderModalError();
+    img.src = cached;
     return;
   }
 
