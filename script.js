@@ -696,11 +696,32 @@ async function preloadExerciseGifs() {
   }
 }
 
-// ── 3차 폴백: free-exercise-db (GitHub, API 없음, 동적 로드) ─────────────────
+// ── 2차 폴백: free-exercise-db (GitHub, API 없음, 동적 로드) ─────────────────
 
-const FEDB_CACHE_KEY = 'fedb_img_cache_v1';
+const FEDB_CACHE_KEY = 'fedb_img_cache_v2'; // v2 — URL 버그 수정
 const FEDB_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30일
-const FEDB_RAW = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/';
+const FEDB_JSON_URL  = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
+const FEDB_IMG_BASE  = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+
+// 우리 앱 영어 이름 → free-exercise-db 정확한 이름 매핑
+const FEDB_ALIASES = {
+  'barbell bench press':         'barbell bench press - medium grip',
+  'incline barbell bench press': 'barbell incline bench press - medium grip',
+  'barbell row':                 'bent over barbell row',
+  'dips':                        'bench dips',
+  'deadlift':                    'barbell deadlift',
+  'hammer curl':                 'alternate hammer curl',
+  'dumbbell hammer curl':        'alternate hammer curl',
+  'incline dumbbell curl':       'alternate incline dumbbell curl',
+  'bicycle crunch':              'bicycle crunch (air bike)',
+  'glute bridge':                'barbell glute bridge',
+  'skull crusher':               'band skull crusher',
+  'one-arm dumbbell row':        'bent over two-dumbbell row',
+  'leg raise':                   'bent-knee hip raise',
+  'crunch':                      '3/4 sit-up',
+  'squat':                       'barbell squat',
+  'lunge':                       'barbell lunge',
+};
 
 function readFedbCache() {
   try {
@@ -713,14 +734,15 @@ function readFedbCache() {
 async function loadFreeExerciseDB() {
   if (readFedbCache()) return; // 이미 캐시 있음
   try {
-    const res = await fetch(FEDB_RAW + 'dist/exercises.json');
-    if (!res.ok) return;
+    console.log('[FEDB] exercises.json 로드 시작...');
+    const res = await fetch(FEDB_JSON_URL);
+    if (!res.ok) { console.warn('[FEDB] JSON 로드 실패:', res.status); return; }
     const exercises = await res.json();
-    // 이름(소문자) → 이미지 URL 매핑
+    // 이름(소문자) → 이미지 URL 매핑 (exercises/ 프리픽스 포함)
     const map = {};
     exercises.forEach(ex => {
       if (ex.images?.length) {
-        map[ex.name.toLowerCase()] = FEDB_RAW + ex.images[0];
+        map[ex.name.toLowerCase()] = FEDB_IMG_BASE + ex.images[0];
       }
     });
     localStorage.setItem(FEDB_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: map }));
@@ -733,10 +755,31 @@ async function loadFreeExerciseDB() {
 function getFreeDbUrl(enName) {
   const cache = readFedbCache();
   if (!cache) return null;
-  // 정확히 일치하는 것 먼저, 없으면 단어 포함 검색
   const key = enName.toLowerCase();
+
+  // 1. 별칭 우선 확인
+  const aliasKey = FEDB_ALIASES[key];
+  if (aliasKey && cache[aliasKey]) return cache[aliasKey];
+
+  // 2. 정확히 일치
   if (cache[key]) return cache[key];
-  const partial = Object.keys(cache).find(k => k.includes(key) || key.includes(k));
+
+  // 3. fedb 이름이 우리 키로 시작 (더 짧은 것 우선)
+  const startsWith = Object.keys(cache)
+    .filter(k => k.startsWith(key))
+    .sort((a, b) => a.length - b.length)[0];
+  if (startsWith) return cache[startsWith];
+
+  // 4. 우리 키에 fedb 이름 포함 (더 긴 것 우선)
+  const keyInFedb = Object.keys(cache)
+    .filter(k => k.includes(key))
+    .sort((a, b) => a.length - b.length)[0];
+  if (keyInFedb) return cache[keyInFedb];
+
+  // 5. fedb 이름이 우리 키 일부를 포함
+  const partial = Object.keys(cache)
+    .filter(k => key.includes(k) && k.length > 4)
+    .sort((a, b) => b.length - a.length)[0];
   return partial ? cache[partial] : null;
 }
 
@@ -836,7 +879,10 @@ auth.onAuthStateChanged(user => {
   renderUserArea();
   const wrapper = document.getElementById('myRoutinesWrapper');
   if (wrapper) wrapper.classList.toggle('hidden', !user);
-  if (user) loadMyRoutines();
+  if (user) {
+    loadMyRoutines();
+    loadAndApplyUserSettings();
+  }
 });
 
 // ── 로그인 / 로그아웃 ─────────────────────────────────────────────────────────
@@ -869,6 +915,7 @@ function renderUserArea() {
       <div class="user-profile">
         ${pic ? `<img class="user-avatar" src="${pic}" alt="${firstName}" referrerpolicy="no-referrer" />` : ''}
         <span class="user-name" title="${currentUser.email}">${firstName}</span>
+        <button class="settings-btn" onclick="openSettingsModal()" title="설정">⚙️</button>
         <button class="logout-btn" onclick="signOut()" title="로그아웃">✕</button>
       </div>`;
   } else {
@@ -991,6 +1038,185 @@ async function loadSavedRoutine(routineId, cardEl) {
     console.error('루틴 로드 실패:', err);
   }
 }
+
+// ── 사용자 설정 (Firestore: users/{uid}/settings/default) ───────────────────
+
+let userSettings = null;
+
+async function loadAndApplyUserSettings() {
+  if (!currentUser) return;
+  try {
+    const doc = await db.collection('users').doc(currentUser.uid)
+      .collection('settings').doc('default').get();
+    if (doc.exists) {
+      userSettings = doc.data();
+      applySettings(userSettings);
+      console.log('[Settings] 설정 불러옴:', userSettings);
+    }
+  } catch (err) {
+    console.warn('[Settings] 불러오기 실패:', err.message);
+  }
+}
+
+function applySettings(settings) {
+  if (!settings) return;
+
+  // 운동 경력
+  if (settings.level) {
+    const levelInput = document.querySelector(`input[name="level"][value="${settings.level}"]`);
+    if (levelInput) levelInput.checked = true;
+  }
+  // 운동 일수
+  if (settings.days >= 2 && settings.days <= 6) {
+    slider.value = settings.days;
+    updateSliderDisplay();
+  }
+  // 목표 부위
+  if (Array.isArray(settings.targets)) {
+    document.querySelectorAll('input[name="target"]').forEach(cb => {
+      cb.checked = settings.targets.includes(cb.value);
+    });
+  }
+  // 장비
+  if (settings.equipment) {
+    const eqInput = document.querySelector(`input[name="equipment"][value="${settings.equipment}"]`);
+    if (eqInput) eqInput.checked = true;
+  }
+}
+
+function openSettingsModal() {
+  const settingsModal = document.getElementById('settingsModal');
+  if (!settingsModal) return;
+  renderSettingsContent();
+  settingsModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSettingsModal() {
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) settingsModal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function renderSettingsContent() {
+  const body = document.getElementById('settingsModalBody');
+  if (!body) return;
+
+  // 현재 폼 값 읽기
+  const curLevel  = document.querySelector('input[name="level"]:checked')?.value ?? '초급';
+  const curDays   = Number(slider.value);
+  const curTgts   = [...document.querySelectorAll('input[name="target"]:checked')].map(el => el.value);
+  const curEquip  = document.querySelector('input[name="equipment"]:checked')?.value ?? '헬스장';
+
+  const levels     = ['초급', '중급', '고급'];
+  const muscles    = ['가슴', '등', '하체', '어깨', '팔', '복근'];
+  const equipments = ['헬스장', '홈짐', '맨몸'];
+
+  body.innerHTML = `
+    <div class="settings-section">
+      <div class="settings-label">운동 경력</div>
+      <div class="settings-radio-group">
+        ${levels.map(l => `
+          <label class="settings-radio">
+            <input type="radio" name="s_level" value="${l}" ${l === curLevel ? 'checked' : ''} />
+            <span>${l}</span>
+          </label>`).join('')}
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">주간 운동 일수 &nbsp;<span id="settingsDaysDisplay" class="settings-days-val">${curDays}일</span></div>
+      <input type="range" id="settingsDaysSlider" min="2" max="6" value="${curDays}" class="slider" />
+      <div class="slider-labels"><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">목표 부위 <small>(복수 선택)</small></div>
+      <div class="settings-checkbox-group">
+        ${muscles.map(m => `
+          <label class="settings-checkbox">
+            <input type="checkbox" name="s_target" value="${m}" ${curTgts.includes(m) ? 'checked' : ''} />
+            <span>${m}</span>
+          </label>`).join('')}
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">사용 가능 장비</div>
+      <div class="settings-radio-group">
+        ${equipments.map(e => `
+          <label class="settings-radio">
+            <input type="radio" name="s_equipment" value="${e}" ${e === curEquip ? 'checked' : ''} />
+            <span>${e}</span>
+          </label>`).join('')}
+      </div>
+    </div>
+
+    <div class="settings-actions">
+      <button class="settings-cancel-btn" onclick="closeSettingsModal()">취소</button>
+      <button class="settings-save-btn" id="settingsSaveBtn" onclick="applyAndSaveSettings()">💾 저장 및 적용</button>
+    </div>
+  `;
+
+  // 슬라이더 이벤트
+  const dSlider  = document.getElementById('settingsDaysSlider');
+  const dDisplay = document.getElementById('settingsDaysDisplay');
+  function updateDSlider() {
+    dDisplay.textContent = dSlider.value + '일';
+    const pct = ((dSlider.value - 2) / 4) * 100;
+    dSlider.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
+  }
+  dSlider.addEventListener('input', updateDSlider);
+  updateDSlider();
+}
+
+function applyAndSaveSettings() {
+  const levelEl   = document.querySelector('input[name="s_level"]:checked');
+  const daysEl    = document.getElementById('settingsDaysSlider');
+  const targetEls = document.querySelectorAll('input[name="s_target"]:checked');
+  const equipEl   = document.querySelector('input[name="s_equipment"]:checked');
+
+  if (!levelEl || !daysEl || !equipEl) return;
+
+  const settings = {
+    level:     levelEl.value,
+    days:      Number(daysEl.value),
+    targets:   [...targetEls].map(el => el.value),
+    equipment: equipEl.value,
+  };
+
+  // 메인 폼에 즉시 반영
+  applySettings(settings);
+
+  // Firestore 저장
+  saveSettingsToFirestore(settings);
+}
+
+async function saveSettingsToFirestore(settings) {
+  if (!currentUser) return;
+  const saveBtn = document.getElementById('settingsSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중…'; }
+
+  try {
+    await db.collection('users').doc(currentUser.uid)
+      .collection('settings').doc('default').set({
+        ...settings,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    userSettings = settings;
+    if (saveBtn) saveBtn.textContent = '✅ 저장됨!';
+    setTimeout(() => closeSettingsModal(), 900);
+  } catch (err) {
+    console.error('[Settings] 저장 실패:', err);
+    if (saveBtn) { saveBtn.textContent = '저장 실패 ❌'; saveBtn.disabled = false; }
+  }
+}
+
+// Settings modal close handlers
+document.getElementById('settingsModalClose')?.addEventListener('click', closeSettingsModal);
+document.getElementById('settingsModal')?.addEventListener('click', e => {
+  if (e.target === document.getElementById('settingsModal')) closeSettingsModal();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

@@ -682,3 +682,159 @@ header h1 {
 }
 
 /* (YouTube 폴백 제거됨 — ExerciseDB GIF 사용) */
+
+/* ── 설정 버튼 (유저 프로필 안) ──────────────────────────────────────────────── */
+
+.settings-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.1rem 0.15rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+
+.settings-btn:hover {
+  color: var(--accent);
+  background: rgba(108, 99, 255, 0.1);
+}
+
+/* ── 설정 모달 ───────────────────────────────────────────────────────────────── */
+
+.settings-modal-box {
+  max-width: 480px;
+}
+
+.settings-modal-body {
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.settings-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-label small {
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.settings-days-val {
+  color: #a78bfa;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+}
+
+/* Radio pills */
+.settings-radio-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-radio { cursor: pointer; }
+.settings-radio input { display: none; }
+
+.settings-radio span {
+  display: inline-block;
+  padding: 0.38rem 0.9rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface2);
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.settings-radio input:checked + span {
+  border-color: var(--accent);
+  background: rgba(108, 99, 255, 0.15);
+  color: var(--accent);
+}
+
+/* Checkbox pills */
+.settings-checkbox-group {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.settings-checkbox { cursor: pointer; }
+.settings-checkbox input { display: none; }
+
+.settings-checkbox span {
+  display: inline-block;
+  padding: 0.32rem 0.8rem;
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface2);
+  font-size: 0.85rem;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.settings-checkbox input:checked + span {
+  border-color: var(--accent);
+  background: rgba(108, 99, 255, 0.15);
+  color: #a78bfa;
+}
+
+/* Actions row */
+.settings-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.2rem;
+}
+
+.settings-save-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1.2rem;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.settings-save-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.settings-save-btn:disabled { opacity: 0.6; cursor: default; }
+
+.settings-cancel-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.settings-cancel-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
