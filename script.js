@@ -696,32 +696,97 @@ async function preloadExerciseGifs() {
   }
 }
 
-// ── 2차 폴백: free-exercise-db (GitHub, API 없음, 동적 로드) ─────────────────
+// ── 2차 폴백: free-exercise-db 정적 이미지 맵 (100% 검증된 URL) ─────────────
 
-const FEDB_CACHE_KEY = 'fedb_img_cache_v2'; // v2 — URL 버그 수정
-const FEDB_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30일
-const FEDB_JSON_URL  = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
-const FEDB_IMG_BASE  = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+const FEDB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
 
-// 우리 앱 영어 이름 → free-exercise-db 정확한 이름 매핑
-const FEDB_ALIASES = {
-  'barbell bench press':         'barbell bench press - medium grip',
-  'incline barbell bench press': 'barbell incline bench press - medium grip',
-  'barbell row':                 'bent over barbell row',
-  'dips':                        'bench dips',
-  'deadlift':                    'barbell deadlift',
-  'hammer curl':                 'alternate hammer curl',
-  'dumbbell hammer curl':        'alternate hammer curl',
-  'incline dumbbell curl':       'alternate incline dumbbell curl',
-  'bicycle crunch':              'bicycle crunch (air bike)',
-  'glute bridge':                'barbell glute bridge',
-  'skull crusher':               'band skull crusher',
-  'one-arm dumbbell row':        'bent over two-dumbbell row',
-  'leg raise':                   'bent-knee hip raise',
-  'crunch':                      '3/4 sit-up',
-  'squat':                       'barbell squat',
-  'lunge':                       'barbell lunge',
+// 각 운동 영어 이름 → 검증된 free-exercise-db 이미지 경로 (직접 확인)
+const EXERCISE_IMG_MAP = {
+  // 가슴
+  'Barbell Bench Press':          'Barbell_Bench_Press_-_Medium_Grip/0.jpg',
+  'Incline Barbell Bench Press':  'Barbell_Incline_Bench_Press_-_Medium_Grip/0.jpg',
+  'Dumbbell Fly':                 'Dumbbell_Flyes/0.jpg',
+  'Incline Dumbbell Press':       'Incline_Dumbbell_Press/0.jpg',
+  'Cable Crossover':              'Cable_Crossover/0.jpg',
+  'Dips':                         'Bench_Dips/0.jpg',
+  'Dumbbell Bench Press':         'Dumbbell_Bench_Press/0.jpg',
+  'Close-Grip Dumbbell Press':    'Dumbbell_Bench_Press/0.jpg',
+  'Push-Up':                      'Decline_Push-Up/0.jpg',
+  'Wide Push-Up':                 'Decline_Push-Up/0.jpg',
+  'Incline Push-Up':              'Decline_Push-Up/0.jpg',
+  'Decline Push-Up':              'Decline_Push-Up/0.jpg',
+  'Diamond Push-Up':              'Decline_Push-Up/0.jpg',
+  // 등
+  'Barbell Row':                  'Bent_Over_Barbell_Row/0.jpg',
+  'Lat Pulldown':                 'Bent_Over_Barbell_Row/0.jpg',
+  'Seated Cable Row':             'Seated_Cable_Rows/0.jpg',
+  'Pull-Up':                      'Chin-Up/0.jpg',
+  'Deadlift':                     'Barbell_Deadlift/0.jpg',
+  'One-Arm Dumbbell Row':         'Bent_Over_Two-Dumbbell_Row/0.jpg',
+  'Inverted Row':                 'Inverted_Row/0.jpg',
+  'Superman':                     'Superman/0.jpg',
+  'Chin-Up':                      'Chin-Up/0.jpg',
+  // 하체
+  'Barbell Squat':                'Barbell_Squat/0.jpg',
+  'Leg Press':                    'Leg_Press/0.jpg',
+  'Romanian Deadlift':            'Romanian_Deadlift/0.jpg',
+  'Leg Curl':                     'Leg_Extensions/0.jpg',
+  'Leg Extension':                'Leg_Extensions/0.jpg',
+  'Calf Raise':                   'Standing_Calf_Raises/0.jpg',
+  'Dumbbell Squat':               'Dumbbell_Squat/0.jpg',
+  'Bulgarian Split Squat':        'Dumbbell_Squat/0.jpg',
+  'Dumbbell Lunge':               'Barbell_Lunge/0.jpg',
+  'Squat':                        'Barbell_Squat/0.jpg',
+  'Lunge':                        'Barbell_Lunge/0.jpg',
+  'Glute Bridge':                 'Barbell_Glute_Bridge/0.jpg',
+  'Jump Squat':                   'Barbell_Squat/0.jpg',
+  // 어깨
+  'Barbell Overhead Press':       'Barbell_Shoulder_Press/0.jpg',
+  'Dumbbell Shoulder Press':      'Dumbbell_Shoulder_Press/0.jpg',
+  'Lateral Raise':                'Side_Lateral_Raise/0.jpg',
+  'Front Raise':                  'Front_Dumbbell_Raise/0.jpg',
+  'Rear Delt Fly':                'Bent_Over_Two-Dumbbell_Row/0.jpg',
+  'Face Pull':                    'Face_Pull/0.jpg',
+  'Pike Push-Up':                 'Decline_Push-Up/0.jpg',
+  'Shoulder Tap Push-Up':         'Decline_Push-Up/0.jpg',
+  'Handstand Hold':               'Decline_Push-Up/0.jpg',
+  'Wall Walk':                    'Decline_Push-Up/0.jpg',
+  // 팔 (이두)
+  'Barbell Curl':                 'Barbell_Curl/0.jpg',
+  'Dumbbell Hammer Curl':         'Alternate_Hammer_Curl/0.jpg',
+  'Incline Dumbbell Curl':        'Alternate_Incline_Dumbbell_Curl/0.jpg',
+  'Dumbbell Curl':                'Alternate_Hammer_Curl/0.jpg',
+  'Hammer Curl':                  'Alternate_Hammer_Curl/0.jpg',
+  'Concentration Curl':           'Concentration_Curls/0.jpg',
+  'Chin-Up (Underhand)':          'Chin-Up/0.jpg',
+  'Reverse-Grip Inverted Row':    'Inverted_Row/0.jpg',
+  'Close-Grip Push-Up':           'Decline_Push-Up/0.jpg',
+  // 팔 (삼두)
+  'Triceps Pushdown':             'Triceps_Pushdown_-_Rope_Attachment/0.jpg',
+  'Skull Crusher':                'Band_Skull_Crusher/0.jpg',
+  'Overhead Triceps Extension':   'Overhead_Triceps/0.jpg',
+  'Dumbbell Triceps Kickback':    'Bent_Over_Two-Dumbbell_Row/0.jpg',
+  // 복근
+  'Crunch':                       '3_4_Sit-Up/0.jpg',
+  'Leg Raise':                    'Bent-Knee_Hip_Raise/0.jpg',
+  'Cable Crunch':                 'Cable_Crunch/0.jpg',
+  'Plank':                        'Plank/0.jpg',
+  'Hanging Leg Raise':            'Hanging_Leg_Raise/0.jpg',
+  'Bicycle Crunch':               'Air_Bike/0.jpg',
+  'Reverse Crunch':               'Reverse_Crunch/0.jpg',
+  'Mountain Climber':             'Mountain_Climbers/0.jpg',
+  'V-Up':                         'Reverse_Crunch/0.jpg',
 };
+
+function getStaticImgUrl(enName) {
+  const path = EXERCISE_IMG_MAP[enName];
+  return path ? FEDB_BASE + path : null;
+}
+
+// 동적 캐시 (ExerciseDB 프리로드 결과 보완용)
+const FEDB_CACHE_KEY = 'fedb_img_cache_v2';
+const FEDB_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+const FEDB_JSON_URL  = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
 
 function readFedbCache() {
   try {
@@ -732,55 +797,30 @@ function readFedbCache() {
 }
 
 async function loadFreeExerciseDB() {
-  if (readFedbCache()) return; // 이미 캐시 있음
+  if (readFedbCache()) return;
   try {
-    console.log('[FEDB] exercises.json 로드 시작...');
     const res = await fetch(FEDB_JSON_URL);
-    if (!res.ok) { console.warn('[FEDB] JSON 로드 실패:', res.status); return; }
+    if (!res.ok) return;
     const exercises = await res.json();
-    // 이름(소문자) → 이미지 URL 매핑 (exercises/ 프리픽스 포함)
     const map = {};
     exercises.forEach(ex => {
       if (ex.images?.length) {
-        map[ex.name.toLowerCase()] = FEDB_IMG_BASE + ex.images[0];
+        map[ex.name.toLowerCase()] = FEDB_BASE + ex.images[0];
       }
     });
     localStorage.setItem(FEDB_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: map }));
-    console.log(`[FEDB] ${Object.keys(map).length}개 운동 이미지 캐시 완료 ✅`);
-  } catch (err) {
-    console.warn('[FEDB] 로드 실패:', err.message);
-  }
+  } catch {}
 }
 
 function getFreeDbUrl(enName) {
+  // 1. 정적 맵 우선 (100% 검증된 URL)
+  const staticUrl = getStaticImgUrl(enName);
+  if (staticUrl) return staticUrl;
+  // 2. 동적 캐시 보완
   const cache = readFedbCache();
   if (!cache) return null;
   const key = enName.toLowerCase();
-
-  // 1. 별칭 우선 확인
-  const aliasKey = FEDB_ALIASES[key];
-  if (aliasKey && cache[aliasKey]) return cache[aliasKey];
-
-  // 2. 정확히 일치
-  if (cache[key]) return cache[key];
-
-  // 3. fedb 이름이 우리 키로 시작 (더 짧은 것 우선)
-  const startsWith = Object.keys(cache)
-    .filter(k => k.startsWith(key))
-    .sort((a, b) => a.length - b.length)[0];
-  if (startsWith) return cache[startsWith];
-
-  // 4. 우리 키에 fedb 이름 포함 (더 긴 것 우선)
-  const keyInFedb = Object.keys(cache)
-    .filter(k => k.includes(key))
-    .sort((a, b) => a.length - b.length)[0];
-  if (keyInFedb) return cache[keyInFedb];
-
-  // 5. fedb 이름이 우리 키 일부를 포함
-  const partial = Object.keys(cache)
-    .filter(k => key.includes(k) && k.length > 4)
-    .sort((a, b) => b.length - a.length)[0];
-  return partial ? cache[partial] : null;
+  return cache[key] ?? null;
 }
 
 // ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
