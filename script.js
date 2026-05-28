@@ -668,8 +668,9 @@ function gifFromCache(enName) {
 
 async function preloadExerciseGifs() {
   if (EXERCISEDB_KEY === 'YOUR_RAPIDAPI_KEY') return;
-  if (readGifCache()) return; // 캐시 유효하면 스킵
+  if (readGifCache()) { console.log('[GIF] 캐시 유효 — 프리로드 생략'); return; }
 
+  console.log('[GIF] ExerciseDB 프리로드 시작...');
   try {
     const res = await fetch(
       'https://exercisedb.p.rapidapi.com/exercises?offset=0&limit=1300',
@@ -680,16 +681,92 @@ async function preloadExerciseGifs() {
         },
       }
     );
-    if (!res.ok) return;
+    console.log('[GIF] 응답:', res.status, res.statusText);
+    if (!res.ok) {
+      console.error('[GIF] ExerciseDB 실패 —', res.status, '(rate limit이면 내일 다시 시도)');
+      return;
+    }
     const exercises = await res.json();
-
     const gifMap = {};
     exercises.forEach(ex => { gifMap[ex.name.toLowerCase()] = ex.gifUrl; });
     writeGifCache(gifMap);
-    console.log(`[ExerciseDB] ${exercises.length}개 운동 GIF 캐시 완료`);
+    console.log(`[GIF] ${exercises.length}개 운동 캐시 완료 ✅`);
   } catch (err) {
-    console.warn('[ExerciseDB] 프리로드 실패:', err.message);
+    console.error('[GIF] 프리로드 오류:', err.message);
   }
+}
+
+// ── 3차 폴백: free-exercise-db (GitHub, API 없음, 무료 정적 이미지) ───────────
+
+const FEDB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+const FEDB_MAP = {
+  'Barbell Bench Press':         'Barbell_Bench_Press_-_Medium_Grip',
+  'Incline Barbell Bench Press': 'Barbell_Incline_Bench_Press_-_Medium_Grip',
+  'Dumbbell Fly':                'Dumbbell_Flyes',
+  'Incline Dumbbell Press':      'Dumbbell_Incline_Press',
+  'Cable Crossover':             'Cable_Crossover_Flyes_-_Pronated',
+  'Dips':                        'Chest_Dip',
+  'Dumbbell Bench Press':        'Dumbbell_Bench_Press',
+  'Push-Up':                     'Pushups',
+  'Wide Push-Up':                'Wide-Grip_Pushups',
+  'Incline Push-Up':             'Incline_Pushup',
+  'Decline Push-Up':             'Decline_Pushup',
+  'Diamond Push-Up':             'Diamond_Pushup',
+  'Barbell Row':                 'Barbell_Bent_Over_Row',
+  'Lat Pulldown':                'Lat_Pulldown',
+  'Seated Cable Row':            'Seated_Cable_Rows',
+  'Pull-Up':                     'Pullup',
+  'Deadlift':                    'Deadlift',
+  'One-Arm Dumbbell Row':        'One-Arm_Dumbbell_Row',
+  'Inverted Row':                'Inverted_Row_with_Straps',
+  'Superman':                    'Superman_Back_Extension',
+  'Chin-Up':                     'Chinup',
+  'Barbell Squat':               'Barbell_Full_Squat',
+  'Leg Press':                   'Leg_Press',
+  'Romanian Deadlift':           'Romanian_Deadlift',
+  'Leg Curl':                    'Leg_Curl',
+  'Leg Extension':               'Leg_Extension',
+  'Calf Raise':                  'Standing_Calf_Raises',
+  'Dumbbell Squat':              'Dumbbell_Squat',
+  'Bulgarian Split Squat':       'Dumbbell_Rear_Lunge',
+  'Dumbbell Lunge':              'Dumbbell_Lunges',
+  'Squat':                       'Bodyweight_Squat',
+  'Lunge':                       'Bodyweight_Lunge',
+  'Glute Bridge':                'Glute_Bridge',
+  'Jump Squat':                  'Jump_Squat',
+  'Barbell Overhead Press':      'Barbell_Shoulder_Press',
+  'Dumbbell Shoulder Press':     'Seated_Dumbbell_Shoulder_Press',
+  'Lateral Raise':               'Side_Lateral_Raise',
+  'Front Raise':                 'Dumbbell_Raise',
+  'Rear Delt Fly':               'Bent-Over_Dumbbell_Rear_Delt_Raise_with_Head_on_Bench',
+  'Face Pull':                   'Face_Pull',
+  'Pike Push-Up':                'Pike_Push-up',
+  'Barbell Curl':                'Barbell_Curl',
+  'Dumbbell Hammer Curl':        'Hammer_Curls',
+  'Incline Dumbbell Curl':       'Incline_Dumbbell_Curl',
+  'Triceps Pushdown':            'Triceps_Pushdown',
+  'Skull Crusher':               'EZ-Bar_Skullcrusher',
+  'Overhead Triceps Extension':  'Triceps_Overhead_Extension_with_Rope',
+  'Dumbbell Curl':               'Dumbbell_Alternate_Bicep_Curl',
+  'Hammer Curl':                 'Hammer_Curls',
+  'Concentration Curl':          'Concentration_Curls',
+  'Dumbbell Triceps Kickback':   'Triceps_Kickback',
+  'Chin-Up (Underhand)':         'Chinup',
+  'Close-Grip Push-Up':          'Close-Grip_Push-Up',
+  'Crunch':                      'Crunch',
+  'Leg Raise':                   'Lying_Leg_Raise',
+  'Cable Crunch':                'Cable_Crunch',
+  'Plank':                       'Plank',
+  'Hanging Leg Raise':           'Hanging_Leg_Raise',
+  'Bicycle Crunch':              'Cross-Body_Crunch',
+  'Reverse Crunch':              'Reverse_Crunch',
+  'Mountain Climber':            'Mountain_Climbers',
+  'V-Up':                        'V-Up',
+};
+
+function getFreeDbUrl(enName) {
+  const dir = FEDB_MAP[enName];
+  return dir ? `${FEDB_BASE}${dir}/images/0.jpg` : null;
 }
 
 // ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
@@ -714,55 +791,33 @@ function renderModalError() {
   modalBody.innerHTML = `<p class="modal-error">${T[lang].gifError}</p>`;
 }
 
-// ── 2차 폴백: wger.de ────────────────────────────────────────────────────────
-
-async function fetchFromWger(enName) {
-  const searchUrl = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(enName)}&language=english&format=json`;
-  const res = await fetch(searchUrl);
-  if (!res.ok) return null;
-  const data = await res.json();
-
-  const suggestion = data.suggestions?.[0];
-  let imgUrl = suggestion?.data?.image;
-  const baseId = suggestion?.data?.base_id;
-
-  if (!imgUrl && baseId) {
-    const imgRes = await fetch(
-      `https://wger.de/api/v2/exerciseimage/?format=json&exercise_base_id=${baseId}`
-    );
-    if (imgRes.ok) {
-      const imgData = await imgRes.json();
-      imgUrl = imgData.results?.[0]?.image;
-    }
-  }
-  return imgUrl ?? null;
-}
 
 // ── 통합 GIF 조회 ─────────────────────────────────────────────────────────────
 
 async function fetchExerciseGif(koName, enName) {
-  // 1차: ExerciseDB 캐시 (API 호출 없음)
+  // 1차: ExerciseDB 캐시 (API 호출 없음 — 즉시)
   const cached = gifFromCache(enName);
   if (cached) {
     showModalGif(cached, enName, 'ExerciseDB', 'https://exercisedb.io');
     return;
   }
 
-  // 캐시 미스 시 단건 조회
+  // 캐시 미스 시 단건 조회 (rate limit이면 조용히 skip)
   if (EXERCISEDB_KEY !== 'YOUR_RAPIDAPI_KEY') {
     try {
-      const url = `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(enName.toLowerCase())}?offset=0&limit=1`;
-      const res = await fetch(url, {
-        headers: {
-          'X-RapidAPI-Key': EXERCISEDB_KEY,
-          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
-        },
-      });
+      const res = await fetch(
+        `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(enName.toLowerCase())}?offset=0&limit=1`,
+        {
+          headers: {
+            'X-RapidAPI-Key': EXERCISEDB_KEY,
+            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+          },
+        }
+      );
       if (res.ok) {
         const data = await res.json();
         const gifUrl = data[0]?.gifUrl;
         if (gifUrl) {
-          // 단건도 캐시에 저장
           const cache = readGifCache() ?? {};
           cache[enName.toLowerCase()] = gifUrl;
           writeGifCache(cache);
@@ -773,14 +828,12 @@ async function fetchExerciseGif(koName, enName) {
     } catch { /* 다음 소스로 */ }
   }
 
-  // 2차: wger.de
-  try {
-    const imgUrl = await fetchFromWger(enName);
-    if (imgUrl) {
-      showModalGif(imgUrl, enName, 'wger.de', 'https://wger.de');
-      return;
-    }
-  } catch { /* 다음 소스로 */ }
+  // 2차: free-exercise-db (GitHub, 무제한 무료, API 없음)
+  const freeUrl = getFreeDbUrl(enName);
+  if (freeUrl) {
+    showModalGif(freeUrl, enName, 'free-exercise-db', 'https://github.com/yuhonas/free-exercise-db');
+    return;
+  }
 
   renderModalError();
 }
