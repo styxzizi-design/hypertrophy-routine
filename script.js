@@ -696,77 +696,48 @@ async function preloadExerciseGifs() {
   }
 }
 
-// ── 3차 폴백: free-exercise-db (GitHub, API 없음, 무료 정적 이미지) ───────────
+// ── 3차 폴백: free-exercise-db (GitHub, API 없음, 동적 로드) ─────────────────
 
-const FEDB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
-const FEDB_MAP = {
-  'Barbell Bench Press':         'Barbell_Bench_Press_-_Medium_Grip',
-  'Incline Barbell Bench Press': 'Barbell_Incline_Bench_Press_-_Medium_Grip',
-  'Dumbbell Fly':                'Dumbbell_Flyes',
-  'Incline Dumbbell Press':      'Dumbbell_Incline_Press',
-  'Cable Crossover':             'Cable_Crossover_Flyes_-_Pronated',
-  'Dips':                        'Chest_Dip',
-  'Dumbbell Bench Press':        'Dumbbell_Bench_Press',
-  'Push-Up':                     'Pushups',
-  'Wide Push-Up':                'Wide-Grip_Pushups',
-  'Incline Push-Up':             'Incline_Pushup',
-  'Decline Push-Up':             'Decline_Pushup',
-  'Diamond Push-Up':             'Diamond_Pushup',
-  'Barbell Row':                 'Barbell_Bent_Over_Row',
-  'Lat Pulldown':                'Lat_Pulldown',
-  'Seated Cable Row':            'Seated_Cable_Rows',
-  'Pull-Up':                     'Pullup',
-  'Deadlift':                    'Deadlift',
-  'One-Arm Dumbbell Row':        'One-Arm_Dumbbell_Row',
-  'Inverted Row':                'Inverted_Row_with_Straps',
-  'Superman':                    'Superman_Back_Extension',
-  'Chin-Up':                     'Chinup',
-  'Barbell Squat':               'Barbell_Full_Squat',
-  'Leg Press':                   'Leg_Press',
-  'Romanian Deadlift':           'Romanian_Deadlift',
-  'Leg Curl':                    'Leg_Curl',
-  'Leg Extension':               'Leg_Extension',
-  'Calf Raise':                  'Standing_Calf_Raises',
-  'Dumbbell Squat':              'Dumbbell_Squat',
-  'Bulgarian Split Squat':       'Dumbbell_Rear_Lunge',
-  'Dumbbell Lunge':              'Dumbbell_Lunges',
-  'Squat':                       'Bodyweight_Squat',
-  'Lunge':                       'Bodyweight_Lunge',
-  'Glute Bridge':                'Glute_Bridge',
-  'Jump Squat':                  'Jump_Squat',
-  'Barbell Overhead Press':      'Barbell_Shoulder_Press',
-  'Dumbbell Shoulder Press':     'Seated_Dumbbell_Shoulder_Press',
-  'Lateral Raise':               'Side_Lateral_Raise',
-  'Front Raise':                 'Dumbbell_Raise',
-  'Rear Delt Fly':               'Bent-Over_Dumbbell_Rear_Delt_Raise_with_Head_on_Bench',
-  'Face Pull':                   'Face_Pull',
-  'Pike Push-Up':                'Pike_Push-up',
-  'Barbell Curl':                'Barbell_Curl',
-  'Dumbbell Hammer Curl':        'Hammer_Curls',
-  'Incline Dumbbell Curl':       'Incline_Dumbbell_Curl',
-  'Triceps Pushdown':            'Triceps_Pushdown',
-  'Skull Crusher':               'EZ-Bar_Skullcrusher',
-  'Overhead Triceps Extension':  'Triceps_Overhead_Extension_with_Rope',
-  'Dumbbell Curl':               'Dumbbell_Alternate_Bicep_Curl',
-  'Hammer Curl':                 'Hammer_Curls',
-  'Concentration Curl':          'Concentration_Curls',
-  'Dumbbell Triceps Kickback':   'Triceps_Kickback',
-  'Chin-Up (Underhand)':         'Chinup',
-  'Close-Grip Push-Up':          'Close-Grip_Push-Up',
-  'Crunch':                      'Crunch',
-  'Leg Raise':                   'Lying_Leg_Raise',
-  'Cable Crunch':                'Cable_Crunch',
-  'Plank':                       'Plank',
-  'Hanging Leg Raise':           'Hanging_Leg_Raise',
-  'Bicycle Crunch':              'Cross-Body_Crunch',
-  'Reverse Crunch':              'Reverse_Crunch',
-  'Mountain Climber':            'Mountain_Climbers',
-  'V-Up':                        'V-Up',
-};
+const FEDB_CACHE_KEY = 'fedb_img_cache_v1';
+const FEDB_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30일
+const FEDB_RAW = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/';
+
+function readFedbCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FEDB_CACHE_KEY));
+    if (raw && Date.now() - raw.ts < FEDB_CACHE_TTL) return raw.data;
+  } catch {}
+  return null;
+}
+
+async function loadFreeExerciseDB() {
+  if (readFedbCache()) return; // 이미 캐시 있음
+  try {
+    const res = await fetch(FEDB_RAW + 'dist/exercises.json');
+    if (!res.ok) return;
+    const exercises = await res.json();
+    // 이름(소문자) → 이미지 URL 매핑
+    const map = {};
+    exercises.forEach(ex => {
+      if (ex.images?.length) {
+        map[ex.name.toLowerCase()] = FEDB_RAW + ex.images[0];
+      }
+    });
+    localStorage.setItem(FEDB_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: map }));
+    console.log(`[FEDB] ${Object.keys(map).length}개 운동 이미지 캐시 완료 ✅`);
+  } catch (err) {
+    console.warn('[FEDB] 로드 실패:', err.message);
+  }
+}
 
 function getFreeDbUrl(enName) {
-  const dir = FEDB_MAP[enName];
-  return dir ? `${FEDB_BASE}${dir}/images/0.jpg` : null;
+  const cache = readFedbCache();
+  if (!cache) return null;
+  // 정확히 일치하는 것 먼저, 없으면 단어 포함 검색
+  const key = enName.toLowerCase();
+  if (cache[key]) return cache[key];
+  const partial = Object.keys(cache).find(k => k.includes(key) || key.includes(k));
+  return partial ? cache[partial] : null;
 }
 
 // ── GIF 표시 헬퍼 ─────────────────────────────────────────────────────────────
@@ -1025,4 +996,5 @@ async function loadSavedRoutine(routineId, cardEl) {
 
 applyLang();
 restoreFromUrl();
-preloadExerciseGifs(); // 앱 시작 시 운동 GIF 전체 캐시 (7일간 API 1콜)
+preloadExerciseGifs();  // ExerciseDB GIF 캐시 (7일)
+loadFreeExerciseDB();   // free-exercise-db 이미지 캐시 (30일, API 없음)
