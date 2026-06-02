@@ -488,7 +488,7 @@ header h1 {
 }
 
 .anim-f0 {
-  animation: flip-f0 1.8s step-end infinite;
+  animation: crossfade-out 2.4s ease-in-out infinite;
 }
 
 .anim-f1 {
@@ -498,18 +498,24 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: flip-f1 1.8s step-end infinite;
+  animation: crossfade-in 2.4s ease-in-out infinite;
 }
 
-@keyframes flip-f0 {
+/* f0: 보임 → 서서히 사라짐 → 서서히 다시 나타남 */
+@keyframes crossfade-out {
   0%   { opacity: 1; }
+  40%  { opacity: 1; }
   50%  { opacity: 0; }
+  90%  { opacity: 0; }
   100% { opacity: 1; }
 }
 
-@keyframes flip-f1 {
+/* f1: 숨음 → 서서히 나타남 → 서서히 다시 사라짐 */
+@keyframes crossfade-in {
   0%   { opacity: 0; }
+  40%  { opacity: 0; }
   50%  { opacity: 1; }
+  90%  { opacity: 1; }
   100% { opacity: 0; }
 }
 
